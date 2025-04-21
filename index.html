@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>NTB 비행기 게임</title> {/* 제목 변경 */}
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet" />
+  <style>
+    /* CSS 스타일은 변경 없음 */
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #gameCanvas {
+      max-width: 100%;
+      max-height: 100%;
+      aspect-ratio: 9/16; /* CSS 비율은 그대로 유지 */
+      box-shadow: 0 0 20px rgba(0, 100, 255, 0.5);
+      opacity: 0;
+      transition: opacity 2s ease;
+    }
+    @media (orientation: portrait) {
+      #gameCanvas {
+        width: 100%;
+        height: auto;
+      }
+    }
+    @media (orientation: landscape) {
+      #gameCanvas {
+        height: 100vh;
+        width: auto;
+      }
+    }
+    /* ... 나머지 CSS ... */
+     .control-buttons {
+      position: fixed;
+      bottom: 5vh;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .control-button {
+      width: 15vw;
+      height: 15vw;
+      max-width: 80px;
+      max-height: 80px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.3);
+      border: 2px solid #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      color: #fff;
+      pointer-events: auto;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .control-button:hover {
+      background: rgba(255, 255, 255, 0.5);
+      transform: scale(1.1);
+    }
+    .control-button:active {
+      background: rgba(255, 255, 255, 0.7);
+      transform: scale(0.95);
+    }
+    .control-button::before {
+      content: attr(data-arrow);
+    }
+    #restartBtn {
+      display: none;
+      position: absolute;
+      left: 50%;
+      top: 60%;
+      transform: translate(-50%, -50%);
+      width: 120px;
+      height: 120px;
+      font-size: 32px;
+      background: rgba(255, 255, 255, 0.4);
+      border: 3px solid #fff;
+      color: #fff;
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+      z-index: 100;
+    }
+    @keyframes pulse {
+      0% {
+        transform: translate(-50%, -50%) scale(1);
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7);
+      }
+      70% {
+        transform: translate(-50%, -50%) scale(1.05);
+        box-shadow: 0 0 0 10px rgba(255, 255, 255, 0);
+      }
+      100% {
+        transform: translate(-50%, -50%) scale(1);
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+      }
+    }
+    #introContainer {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      z-index: 2000;
+      opacity: 1;
+      transition: opacity 2.5s ease;
+    }
+    #introVideo {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+  </style>
+</head>
+<body>
+  <div id="introContainer">
+    <video id="introVideo" playsinline muted>
+      <source src="intro.mp4" type="video/mp4" />
+      브라우저가 비디오를 지원하지 않습니다.
+    </video>
+  </div>
+  <div class="game-container">
+    <canvas id="gameCanvas"></canvas>
+    <div class="control-buttons">
+      <button id="restartBtn" class="control-button" data-arrow="↺"></button>
+    </div>
+  </div>
+
+  <script>
+    /* -------------------- 인트로 처리 -------------------- */
+    const introContainer = document.getElementById("introContainer");
+    const introVideo = document.getElementById("introVideo");
+    const canvas = document.getElementById("gameCanvas");
+    let introPlayed = false;
+    let transitionStarted = false;
+
+    function playIntro() { /* ... 이전과 동일 ... */
+      introVideo.play().catch(showPlayPrompt);
+      introVideo.addEventListener("timeupdate", () => {
+        if (!introVideo.duration) return;
+        const d = introVideo.duration, t = introVideo.currentTime;
+        if ((t >= d * 0.5 || t >= d - 0.5) && !transitionStarted) {
+          transitionStarted = true;
+          startFadeTransition();
+        }
+      });
+    }
+    function showPlayPrompt() { /* ... 이전과 동일 ... */
+      const p = document.createElement("div");
+      Object.assign(p.style, { position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", color: "#fff", fontSize: "24px", background: "rgba(0,0,0,.5)", padding: "20px", borderRadius: "10px", cursor: "pointer", textAlign: "center" });
+      p.textContent = "화면을 클릭하여 시작하세요";
+      introContainer.appendChild(p);
+      introContainer.addEventListener("click", () => {
+          introVideo.play().catch(e => console.error("Intro video play error:", e));
+          p.remove();
+          initAudioContext();
+        }, { once: true });
+    }
+    function startFadeTransition() { /* ... 이전과 동일 ... */
+      if (introPlayed) return;
+      introPlayed = true;
+      introContainer.style.opacity = "0";
+      initAudioContext();
+      setTimeout(() => {}, 2500); // 이 setTimeout은 의미가 없어 보이는데, 유지합니다.
+    }
+    introVideo.addEventListener("ended", () => { if (!transitionStarted) startFadeTransition(); });
+
+    /* -------------------- 이미지/오디오 로드 -------------------- */
+    const ASSETS = { bg: "background.png", p: "player.png", e1: "enemy1.png", e2: "enemy2.png", h1: "health_item1.png", h2: "health_item2.png", };
+    const AUDIO_ASSETS = { bgm: "background.mp3", hit: "hit.wav", explosion: "explosion.wav", item: "item.wav", };
+    const IMG = {};
+    let loadedImages = 0;
+    let audioContext;
+    const audioBuffers = {};
+    let bgmSource = null;
+    let loadedSounds = 0;
+    let totalAssets = Object.keys(ASSETS).length + Object.keys(AUDIO_ASSETS).length;
+    // <<< 오디오 볼륨 변수 정의 추가 (이전 코드에 없었으므로 추가) >>>
+    const AUDIO_VOLUMES = {
+        bgm: 0.1, hit: 0.2, explosion: 1, item: 0.6
+    };
+    window.assetsLoadingStarted = false;
+    window.gameInitialized = false;
+
+    function initAudioContext() { /* ... 이전과 동일 ... */
+      let startLoading = false;
+      if (!audioContext) {
+        try { audioContext = new (window.AudioContext || window.webkitAudioContext)(); console.log("AudioContext initialized."); startLoading = true; }
+        catch (e) { console.error("Web Audio API is not supported in this browser", e); loadedSounds = Object.keys(AUDIO_ASSETS).length; startLoading = true; }
+      } else { startLoading = true; }
+      if (startLoading && !window.assetsLoadingStarted) { window.assetsLoadingStarted = true; console.log("Triggering asset loading..."); loadAssets(); }
+    }
+
+    function loadAssets() { /* ... 이전과 동일 ... */
+      totalAssets = Object.keys(ASSETS).length + Object.keys(AUDIO_ASSETS).length; console.log("Starting asset loading... Total assets:", totalAssets); loadImages(); loadAudioAssets();
+    }
+
+    function checkAssetsLoaded() { /* ... 이전과 동일 ... */
+        console.log(`Assets Check: Images Loaded = <span class="math-inline">\{loadedImages\}/</span>{Object.keys(ASSETS).length}, Sounds Loaded = <span class="math-inline">\{loadedSounds\}/</span>{Object.keys(AUDIO_ASSETS).length}, Total Required = ${totalAssets}`);
+        if (loadedImages + loadedSounds >= totalAssets) {
+            if (!window.gameInitialized) {
+                window.gameInitialized = true; window.assetsLoadingStarted = false; console.log("All assets accounted for. Initializing game..."); introContainer.style.display = "none"; initGame();
+            }
+        }
+    }
+
+    function loadImages() { /* ... 이전과 동일 ... */
+      if (Object.keys(ASSETS).length === 0) { checkAssetsLoaded(); return; } let imagesToLoad = Object.keys(ASSETS).length; if(imagesToLoad === 0) { checkAssetsLoaded(); return; } for (const k in ASSETS) { IMG[k] = new Image(); IMG[k].src = ASSETS[k]; IMG[k].onload = () => { loadedImages++; checkAssetsLoaded(); }; IMG[k].onerror = () => { console.error(`Failed to load image: ${ASSETS[k]}`); loadedImages++; checkAssetsLoaded(); }; }
+    }
+
+    // <<< 오디오 로딩 시 볼륨 적용 안 됨 -> playSound에서 처리하므로 이 함수는 수정 불필요 >>>
+    function loadAudioAssets() { /* ... 이전과 동일 ... */
+       if (!audioContext) { console.warn("AudioContext not available, skipping audio load."); checkAssetsLoaded(); return; } let soundsToLoad = Object.keys(AUDIO_ASSETS).length; if (soundsToLoad === 0) { checkAssetsLoaded(); return; } for (const key in AUDIO_ASSETS) { fetch(AUDIO_ASSETS[key]).then(response => { if (!response.ok) { throw new Error(`HTTP error! status: ${response.status} for ${AUDIO_ASSETS[key]}`); } return response.arrayBuffer(); }).then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer)).then(audioBuffer => { audioBuffers[key] = audioBuffer; loadedSounds++; console.log(`Audio loaded: ${AUDIO_ASSETS[key]}`); checkAssetsLoaded(); }).catch(error => { console.error(`Failed to load or decode audio: ${AUDIO_ASSETS[key]}`, error); loadedSounds++; checkAssetsLoaded(); }); }
+    }
+
+    /* -------------------- 캔버스 & 상수 -------------------- */
+    const ctx = canvas.getContext("2d");
+
+    // <<< 수정: 캔버스 내부 해상도를 9:16 비율 (540x960)로 설정 >>>
+    canvas.width = 540;
+    canvas.height = 960;
+    console.log(`Canvas internal resolution set to: ${canvas.width} x ${canvas.height}`);
+    // <<< 수정 끝 >>>
+
+    // 기존 크기 유지 (필요 시 이 값들도 새 해상도에 맞게 조정 필요)
+    const PLAYER_SIZE = 80; const ENEMY_SIZE = 65; const ITEM_SIZE = 65;
+    const ITEM_INTERVAL = 10000; const BASE_SHOT_INT = 500;
+    const SPEED_FACTOR = 0.02; const MOVE_SPEED = 8;
+
+    /* -------------------- 상태 -------------------- */
+    let player, enemies, missiles, items, explosions, playerEnergy, score, gameOver, missileCount, missilePickups, shotInterval, lastItemTime, lastShotTime, startTime;
+    let canvasXRatio = 1, canvasYRatio = 1, moveSpeedX = MOVE_SPEED, moveSpeedY = MOVE_SPEED;
+    let isTouching = false, lastTouchX = null, lastTouchY = null;
+    let keys = {}; // let으로 선언된 것 유지
+
+    function updateCanvasRatio() { /* ... 이전과 동일 ... */
+      const rect = canvas.getBoundingClientRect(); if (rect.width === 0 || rect.height === 0) return; canvasXRatio = canvas.width / rect.width; canvasYRatio = canvas.height / rect.height; if (canvasXRatio > canvasYRatio) { moveSpeedX = MOVE_SPEED * (canvasYRatio / canvasXRatio); moveSpeedY = MOVE_SPEED; } else { moveSpeedX = MOVE_SPEED; moveSpeedY = MOVE_SPEED * (canvasXRatio / canvasYRatio); }
+    }
+    window.addEventListener("resize", updateCanvasRatio);
+
+    /* -------------------- 입력 -------------------- */
+    window.addEventListener("keydown", (e) => (keys[e.key] = true));
+    window.addEventListener("keyup", (e) => (keys[e.key] = false));
+    const restartBtn = document.getElementById("restartBtn"); restartBtn.addEventListener("click", () => { restartBtn.style.display = "none"; initGame(); });
+    function pointerStart(clientX, clientY) { /* ... 이전과 동일 ... */
+      if (!player) return; isTouching = true; const rect = canvas.getBoundingClientRect(); const canvasX = (clientX - rect.left) * canvasXRatio; const canvasY = (clientY - rect.top) * canvasYRatio; lastTouchX = canvasX; lastTouchY = canvasY; player.x = canvasX - player.w / 2; player.y = canvasY - player.h / 2; clampPlayer();
+    }
+    function pointerMove(clientX, clientY) { /* ... 이전과 동일 ... */
+      if (!isTouching || !player) return; const rect = canvas.getBoundingClientRect(); const canvasX = (clientX - rect.left) * canvasXRatio; const canvasY = (clientY - rect.top) * canvasYRatio; const dx = canvasX - lastTouchX; const dy = canvasY - lastTouchY; player.x += dx; player.y += dy; clampPlayer(); lastTouchX = canvasX; lastTouchY = canvasY;
+    }
+    function pointerEnd() { /* ... 이전과 동일 ... */
+      isTouching = false; lastTouchX = null; lastTouchY = null;
+    }
+    function clampPlayer() { /* ... 이전과 동일 ... */
+      if (!player) return; player.x = Math.max(0, Math.min(canvas.width - player.w, player.x)); player.y = Math.max(0, Math.min(canvas.height - player.h, player.y));
+    }
+    canvas.addEventListener("touchstart", (e) => { e.preventDefault(); if (e.touches.length > 0) pointerStart(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false }); canvas.addEventListener("touchmove", (e) => { e.preventDefault(); if (e.touches.length > 0) pointerMove(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false }); canvas.addEventListener("touchend", (e) => { e.preventDefault(); pointerEnd(); }); canvas.addEventListener("touchcancel", (e) => { e.preventDefault(); pointerEnd(); }); canvas.addEventListener("mousedown", (e) => pointerStart(e.clientX, e.clientY));
+    // <<<mousemove 수정: isTouching 체크 추가 (터치 상태일때만 실행)>>>
+    canvas.addEventListener("mousemove", (e) => { if(isTouching) pointerMove(e.clientX, e.clientY); });
+    // <<<수정 끝>>>
+    canvas.addEventListener("mouseup", pointerEnd); canvas.addEventListener("mouseleave", pointerEnd); window.addEventListener("keydown", (e) => { if (e.key === " " && !gameOver && player) shootMissile(); });
+
+    /* -------------------- 유틸 -------------------- */
+    function roundRect(ctx, x, y, w, h, r, fill, stroke) { /* ... 이전과 동일 ... */
+      if (w < 2 * r) r = w / 2; if (h < 2 * r) r = h / 2; ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); if (fill) ctx.fill(); if (stroke) ctx.stroke();
+    }
+    // <<< playSound 함수 수정 (볼륨 조절 기능 추가, 이전 버전 코드에는 없었음) >>>
+    function playSound(key, loop = false) {
+        if (!audioContext || !audioBuffers[key]) { return null; }
+        try {
+            const source = audioContext.createBufferSource();
+            source.buffer = audioBuffers[key];
+            source.loop = loop;
+            const gainNode = audioContext.createGain();
+            const volume = AUDIO_VOLUMES[key] !== undefined ? AUDIO_VOLUMES[key] : 1.0;
+            gainNode.gain.value = volume;
+            source.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            source.start(0);
+            return source; // BGM 중지를 위해 source 반환
+        } catch (e) {
+            console.error(`Error playing sound ${key}:`, e);
+            return null;
+        }
+    }
+    // <<< 수정 끝 >>>
+
+
+    /* -------------------- 클래스 (Player, Missile, Enemy, Explosion, Item) -------------------- */
+    // 클래스 정의는 제공된 코드 원본 기준으로 유지 (이전 수정사항 반영 안됨)
+    class Player { constructor() { this.w = PLAYER_SIZE; this.h = PLAYER_SIZE; this.x = canvas.width / 2 - this.w / 2; this.y = canvas.height - this.h - 10; } move() { if (keys.ArrowLeft && this.x > 0) this.x -= moveSpeedX; if (keys.ArrowRight && this.x < canvas.width - this.w) this.x += moveSpeedX; if (keys.ArrowUp && this.y > 0) this.y -= moveSpeedY; if (keys.ArrowDown && this.y < canvas.height - this.h) this.y += moveSpeedY; } draw() { if (IMG.p && IMG.p.complete) ctx.drawImage(IMG.p, this.x, this.y, this.w, this.h); else { ctx.fillStyle = "blue"; ctx.fillRect(this.x, this.y, this.w, this.h); } } }
+    class Missile { constructor(x, y, ang = 0) { this.w = 10; this.h = 28; this.x = x - this.w / 2; this.y = y; this.sp = 15; this.ang = (ang * Math.PI) / 180; } move() { this.y -= Math.cos(this.ang) * this.sp; this.x += Math.sin(this.ang) * this.sp; } draw() { ctx.save(); ctx.translate(this.x + this.w / 2, this.y + this.h / 2); ctx.rotate(this.ang); /* ctx.shadowColor = "#ffae33"; ctx.shadowBlur = 12; */ const grad = ctx.createLinearGradient(0, -this.h / 2, 0, this.h / 2); grad.addColorStop(0, "#fff"); grad.addColorStop(1, "#ff4500"); ctx.fillStyle = grad; ctx.beginPath(); ctx.moveTo(0, -this.h / 2); ctx.lineTo(this.w / 2, this.h / 2); ctx.lineTo(-this.w / 2, this.h / 2); ctx.closePath(); ctx.fill(); /* ctx.shadowBlur = 0; */ ctx.restore(); } } // 그림자 효과 주석 처리된 원본 상태
+    class Enemy { constructor(type) { this.w = ENEMY_SIZE; this.h = ENEMY_SIZE; this.x = Math.random() * (canvas.width - this.w); this.y = -this.h; this.type = type; this.health = type; this.baseSp = 1 + Math.random() * 2; } move(now) { const elapsed = (now - startTime) / 1000; this.y += this.baseSp + elapsed * SPEED_FACTOR; } draw() { const img = this.type === 1 ? IMG.e1 : IMG.e2; if (img && img.complete) ctx.drawImage(img, this.x, this.y, this.w, this.h); else { ctx.fillStyle = this.type === 1 ? "purple" : "darkred"; ctx.fillRect(this.x, this.y, this.w, this.h); } } }
+    class Explosion { constructor(x, y) { this.x = x; this.y = y; this.r = 12; this.alpha = 1; this.duration = 0.5; this.startTime = performance.now(); } update(now) { const elapsed = (now - this.startTime) / 1000; const progress = Math.min(1, elapsed / this.duration); this.r = 12 + progress * 40; this.alpha = 1 - progress; } draw() { if (this.alpha <= 0) return; ctx.save(); ctx.globalAlpha = this.alpha; const g = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.r); g.addColorStop(0, "rgba(255, 255, 180, 1)"); g.addColorStop(0.3, "rgba(255, 170, 51, 0.8)"); g.addColorStop(0.6, "rgba(255, 85, 34, 0.5)"); g.addColorStop(1, "rgba(255, 0, 0, 0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2); ctx.fill(); ctx.restore(); } get done() { return this.alpha <= 0; } } // 원본 Explosion draw
+    class Item { constructor() { this.w = ITEM_SIZE; this.h = ITEM_SIZE; this.x = Math.random() * (canvas.width - this.w); this.y = -this.h; this.sp = 3; this.type = Math.random() < 0.5 ? "health" : "missile"; } move() { this.y += this.sp; } draw() { const img = this.type === "health" ? IMG.h1 : IMG.h2; if (img && img.complete) ctx.drawImage(img, this.x, this.y, this.w, this.h); else { ctx.fillStyle = this.type === "health" ? "lime" : "orange"; ctx.fillRect(this.x, this.y, this.w, this.h); } } }
+
+
+    /* -------------------- 충돌 & 발사 -------------------- */
+    function isCollision(a, b) { return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+    function shootMissile() { /* ... 이전과 동일 ... */
+      if (!player || gameOver) return; const sx = player.x + player.w / 2; const sy = player.y; if (missileCount === 1) { missiles.push(new Missile(sx, sy)); } else { const spreadAngle = 15; for (let i = 0; i < missileCount; i++) { const angle = (i - (missileCount - 1) / 2) * spreadAngle; missiles.push(new Missile(sx, sy, angle)); } }
+    }
+
+    /* -------------------- 게임 초기화 -------------------- */
+    function initGame() { /* ... 이전과 동일 ... */
+      window.gameInitialized = false;
+      console.log("Initializing game variables...");
+      player = new Player(); enemies = []; missiles = []; items = []; explosions = []; playerEnergy = 100; score = 0; gameOver = false; missileCount = 1; missilePickups = 0; shotInterval = BASE_SHOT_INT; startTime = performance.now(); lastItemTime = startTime; lastShotTime = startTime;
+      keys = {};
+      updateCanvasRatio(); canvas.style.opacity = "1"; restartBtn.style.display = "none";
+      if (bgmSource) { try { bgmSource.stop(); } catch (e) {} }
+      // <<< playSound 호출 시 볼륨 조절이 적용됨 >>>
+      bgmSource = playSound('bgm', true); if (!bgmSource) console.warn("BGM could not be played.");
+      window.gameInitialized = true; // 초기화 완료 플래그 설정 위치 변경 (playSound 호출 후)
+      requestAnimationFrame(gameLoop);
+    }
+
+    /* -------------------- UI & 배경 -------------------- */
+    function drawBackground() { /* ... 이전과 동일 ... */
+       if (IMG.bg && IMG.bg.complete) ctx.drawImage(IMG.bg, 0, 0, canvas.width, canvas.height); else { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+    }
+    function drawUI() { /* ... 이전과 동일 (그림자 효과 포함 원본) ... */
+       const gx = 20, gy = 20, gw = 240, gh = 26, r = 13; ctx.fillStyle = "rgba(255,255,255,0.12)"; roundRect(ctx, gx, gy, gw, gh, r, true, false); const grad = ctx.createLinearGradient(gx, 0, gx + gw, 0); grad.addColorStop(0, "#00ffcc"); grad.addColorStop(1, "#0066ff"); ctx.fillStyle = grad; roundRect(ctx, gx, gy, Math.max(0, (gw * playerEnergy) / 100), gh, r, true, false); ctx.lineWidth = 2; ctx.strokeStyle = "#fff"; roundRect(ctx, gx, gy, gw, gh, r, false, true); ctx.font = "16px 'Orbitron', sans-serif"; ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(Math.max(0, Math.floor(playerEnergy)) + "%", gx + gw / 2, gy + gh / 2 + 1); ctx.font = "28px 'Orbitron', sans-serif"; ctx.textAlign = "right"; /* ctx.shadowColor = "#00baff"; ctx.shadowBlur = 4; */ ctx.fillStyle="#fff"; ctx.fillText("SCORE " + score.toString().padStart(5, "0"), canvas.width - 30, 40); /* ctx.shadowBlur = 0; */ // 그림자 효과 주석 처리됨
+    }
+
+    /* -------------------- 메인 루프 -------------------- */
+    function gameLoop(now) { /* ... 이전과 동일 (볼륨 조절된 playSound 호출) ... */
+        if (gameOver) return; drawBackground(); if (player && now - lastShotTime >= shotInterval) { shootMissile(); lastShotTime = now; } if (player) { player.move(); clampPlayer(); player.draw(); }
+        // <<< 스폰율은 원래대로 0.02 시작 >>>
+        const spawnRate = 0.02 + Math.min(0.03, (now - startTime) / 1000 * 0.0005);
+        if (Math.random() < spawnRate) enemies.push(new Enemy(Math.random() < 0.6 ? 1 : 2)); if (now - lastItemTime >= ITEM_INTERVAL) { items.push(new Item()); lastItemTime = now; } for (let i = enemies.length - 1; i >= 0; i--) { if (!enemies[i]) continue; const e = enemies[i]; e.move(now); e.draw(); if (e.y > canvas.height) { enemies.splice(i, 1); continue; } if (player && isCollision(player, e)) { playerEnergy -= 20; explosions.push(new Explosion(e.x + e.w / 2, e.y + e.h / 2)); playSound('explosion'); enemies.splice(i, 1); if (playerEnergy <= 0) { gameOver = true; } continue; } for (let j = missiles.length - 1; j >= 0; j--) { if (!missiles[j]) continue; if (isCollision(missiles[j], e)) { playSound('hit'); missiles.splice(j, 1); e.health--; if (e.health <= 0) { score++; explosions.push(new Explosion(e.x + e.w / 2, e.y + e.h / 2)); playSound('explosion'); enemies.splice(i, 1); break; } } } } for (let i = items.length - 1; i >= 0; i--) { if (!items[i]) continue; const it = items[i]; it.move(); it.draw(); if (it.y > canvas.height) { items.splice(i, 1); continue; } if (player && isCollision(player, it)) { playSound('item'); if (it.type === "health") { playerEnergy = Math.min(100, playerEnergy + 30); } else { missilePickups = Math.min(3, missilePickups + 1); if (missilePickups === 1) shotInterval = BASE_SHOT_INT / 1.5; else if (missilePickups === 2) missileCount = 2; else if (missilePickups === 3) missileCount = 3; } items.splice(i, 1); } } for (let i = missiles.length - 1; i >= 0; i--) { if (!missiles[i]) continue; const m = missiles[i]; m.move(); m.draw(); if (m.y < -m.h || m.x < -m.w || m.x > canvas.width) missiles.splice(i, 1); } for (let i = explosions.length - 1; i >= 0; i--) { if (!explosions[i]) continue; const ex = explosions[i]; ex.update(now); ex.draw(); if (ex.done) explosions.splice(i, 1); } drawUI(); if (gameOver) { if (bgmSource) { try { bgmSource.stop(); bgmSource = null; } catch (e) {} } ctx.fillStyle = "rgba(0, 0, 0, 0.7)"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = "#fff"; ctx.font = "40px 'Orbitron', sans-serif"; ctx.textAlign = "center"; ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 40); ctx.font = "28px 'Orbitron', sans-serif"; ctx.fillText("SCORE: " + score.toString().padStart(5, "0"), canvas.width / 2, canvas.height / 2); restartBtn.style.display = "flex"; console.log("Game Over!"); window.gameInitialized = false; /* 게임 오버 시 초기화 플래그 추가 */ return; } requestAnimationFrame(gameLoop);
+    }
+
+    /* -------------------- 시작 -------------------- */
+    window.addEventListener("load", playIntro);
+
+  </script>
+</body>
+</html>
